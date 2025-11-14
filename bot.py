@@ -168,7 +168,7 @@ def send_daily_messages():
             for uid, name in users.items():
                 hero = get_today_hero(uid)
                 try:
-                    bot.send_message(uid, f"пук")
+                    bot.send_message(uid, f"пук. Нагадую, що існує прекрасний сайт - https://karaylo.github.io/regeta/")
                 except Exception as e:
                     print(f"Не вдалося відправити {uid}: {e}")
 

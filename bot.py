@@ -14,6 +14,7 @@ from database import (
     save_last_hero
 )
 
+# Ініціалізація БД при старті
 init_db()
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -36,41 +37,33 @@ heroes = [
     "Смик-Андроїд",
 ]
 
-
 # ============================================
-#  КОРЕКТНИЙ АЛГОРИТМ WHOAMI (без чередування)
+#  Алгоритм whoami
 # ============================================
 
 def get_today_hero(user_id):
     today = datetime.date.today().isoformat()
 
-    # 1. Перевіряємо, чи є герой на сьогодні
     last = get_last_hero(user_id)
     if last and last["date"] == today:
         return last["hero"]
 
-    # 2. Генеруємо детермінований герой
     seed = f"{user_id}-{today}"
     h = hashlib.sha256(seed.encode()).digest()
     rng = random.Random(int.from_bytes(h, "big"))
     hero = rng.choice(heroes)
 
-    # 3. Вчорашній герой (якщо є)
     yesterday_hero = last["hero"] if last else None
 
-    # 4. Якщо повтор — беремо інший
     if yesterday_hero == hero:
         available = [h for h in heroes if h != yesterday_hero]
         hero = rng.choice(available)
 
-    # 5. Зберігаємо героя на сьогодні (1 раз!)
     save_last_hero(user_id, hero, today)
-
     return hero
 
-
 # ============================================
-#             КОМАНДИ БОТА
+#            КОМАНДИ БОТА
 # ============================================
 
 @bot.message_handler(commands=['start'])
@@ -82,7 +75,6 @@ def start(message):
     bot.send_message(message.chat.id,
                      f"Привіт, {name}! Напиши /whoami щоб дізнатися свого героя на сьогодні.")
 
-
 @bot.message_handler(commands=['whoami'])
 def whoami(message):
     user_id = message.from_user.id
@@ -93,27 +85,22 @@ def whoami(message):
     hero = get_today_hero(user_id)
     bot.reply_to(message, f"{name}, сьогодні ти — {hero}!")
 
-
 # Мемні команди
 @bot.message_handler(commands=['stepan'])
 def stepan(message):
     bot.reply_to(message, "В степана в дупі шнобель\n" * 3)
 
-
 @bot.message_handler(commands=['regeta'])
 def regeta(message):
     bot.reply_to(message, "Регета пердун!\n" * 3)
-
 
 @bot.message_handler(commands=['shnobel'])
 def shnobel(message):
     bot.reply_to(message, "В Регети в дупі шнобель!\n" * 3)
 
-
 @bot.message_handler(commands=['smekuni'])
 def smekuni(message):
     bot.reply_to(message, "🐂Смик бик — Бик Смик!🐂\n" * 3)
-
 
 # ============================================
 #         АВТОМАТИЧНА ЩОДЕННА РОЗСИЛКА
@@ -131,6 +118,8 @@ def send_daily_messages():
         if sent_today != today:
             users = get_users()
 
+            print(f"Відправляю розсилку {len(users)} користувачам...")
+
             for u in users:
                 uid = u["user_id"]
                 try:
@@ -145,9 +134,8 @@ def send_daily_messages():
 
         time.sleep(60)
 
-
 # ============================================
-#            ЗАПУСК БОТА (409 FIX)
+#               ЗАПУСК БОТА
 # ============================================
 
 if __name__ == "__main__":

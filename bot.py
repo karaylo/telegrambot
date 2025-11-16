@@ -6,12 +6,20 @@ import os
 import hashlib
 import threading
 
+from database import (
+    init_db,
+    add_user,
+    get_users,
+    get_last_hero,
+    save_last_hero
+)
+
+# --- INIT DATABASE ---
+init_db()
+
 TOKEN = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-# ---------------------------
-# СПИСОК ГЕРОЇВ
-# ---------------------------
 heroes = [
     "Бичок",
     "Смик",
@@ -29,73 +37,24 @@ heroes = [
     "Смик-Андроїд",
 ]
 
-USERS_FILE = "users.txt"
-LAST_HERO_FILE = "last_heroes.txt"
-
 # ---------------------------
-# ЗБЕРІГАННЯ КОРИСТУВАЧІВ
-# ---------------------------
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        return {}
-    users = {}
-    with open(USERS_FILE, "r") as f:
-        for line in f:
-            parts = line.strip().split(";")
-            if len(parts) == 2:
-                uid, name = parts
-                users[int(uid)] = name
-    return users
-
-
-def save_user(user_id, first_name):
-    users = load_users()
-    if user_id not in users:
-        with open(USERS_FILE, "a") as f:
-            f.write(f"{user_id};{first_name}\n")
-
-
-# ---------------------------
-# ЗБЕРІГАННЯ ОСТАННЬОГО ГЕРОЯ (для уникнення повторів)
-# ---------------------------
-def load_last_heroes():
-    if not os.path.exists(LAST_HERO_FILE):
-        return {}
-    data = {}
-    with open(LAST_HERO_FILE, "r") as f:
-        for line in f:
-            uid, hero = line.strip().split(";")
-            data[int(uid)] = hero
-    return data
-
-
-def save_last_hero(user_id, hero):
-    heroes_data = load_last_heroes()
-    heroes_data[user_id] = hero
-
-    with open(LAST_HERO_FILE, "w") as f:
-        for uid, h in heroes_data.items():
-            f.write(f"{uid};{h}\n")
-
-
-# ---------------------------
-# ВИБІР ГЕРОЯ /whoami (стабільний, залежить від дня)
+# /whoami — стабільний герой
 # ---------------------------
 def get_today_hero(user_id):
     today = datetime.date.today().isoformat()
     text = f"{user_id}-{today}"
 
-    hash_bytes = hashlib.sha256(text.encode()).digest()
-    rng = random.Random(int.from_bytes(hash_bytes, "big"))
+    h = hashlib.sha256(text.encode()).digest()
+    rng = random.Random(int.from_bytes(h, "big"))
 
     return rng.choice(heroes)
 
 
 # ---------------------------
-# РЕАЛЬНИЙ ВИПАДКОВИЙ ГЕРОЙ БЕЗ ПОВТОРУ (для розсилки)
+# Для авто-розсилки — без повторів
 # ---------------------------
 def get_random_hero_no_repeat(user_id):
-    last = load_last_heroes().get(user_id)
+    last = get_last_hero(user_id)
     available = [h for h in heroes if h != last]
 
     hero = random.choice(available)
@@ -104,74 +63,61 @@ def get_random_hero_no_repeat(user_id):
 
 
 # ---------------------------
-# КОМАНДИ БОТА
+# Команди
 # ---------------------------
 @bot.message_handler(commands=['start'])
 def start(message):
     name = message.from_user.first_name or "Герой"
-    save_user(message.chat.id, name)
+    add_user(message.chat.id, name)
+
     bot.send_message(message.chat.id,
-        f"Привіт, {name}! 👋\n"
-        f"Напиши /whoami, щоб дізнатись хто ти сьогодні!"
+        f"Привіт, {name}! Напиши /whoami щоб дізнатися хто ти сьогодні."
     )
 
 
 @bot.message_handler(commands=['whoami'])
 def whoami(message):
+    add_user(message.chat.id, message.from_user.first_name)
     hero = get_today_hero(message.from_user.id)
-    name = message.from_user.first_name or "Герой"
-    save_user(message.chat.id, name)
-    bot.reply_to(message, f"{name}, сьогодні ти — {hero}!")
+
+    bot.reply_to(message, f"{message.from_user.first_name}, сьогодні ти — {hero}!")
 
 
-# ---- Твої мемні команди -----------------
+# Мемні команди (залишаю)
 @bot.message_handler(commands=['stepan'])
-def stepan(message):
-    bot.reply_to(message, "В степана в дупі шнобель\n" * 3)
+def stepan(message): bot.reply_to(message, "В степана в дупі шнобель\n" * 3)
 
 @bot.message_handler(commands=['regeta'])
-def regeta(message):
-    bot.reply_to(message, "Регета пердун!\n" * 3)
+def regeta(message): bot.reply_to(message, "Регета пердун!\n" * 3)
 
 @bot.message_handler(commands=['shnobel'])
-def shnobel(message):
-    bot.reply_to(message, "В Регети в дупі шнобель!\n" * 3)
-
-@bot.message_handler(commands=['shpaga'])
-def shpaga(message):
-    bot.reply_to(message, "Регета, не точи шпагу!\n" * 3)
+def shnobel(message): bot.reply_to(message, "В Регети в дупі шнобель!\n" * 3)
 
 @bot.message_handler(commands=['smekuni'])
-def smekuni(message):
-    bot.reply_to(message, "🐂Смик бик — Бик Смик!🐂\n" * 3)
-
-@bot.message_handler(commands=['baget'])
-def baget(message):
-    bot.reply_to(message, "Регета — барон багета! Шноблик у дупі😍😋🤭")
-
-@bot.message_handler(commands=['jejeta'])
-def jejeta(message):
-    bot.reply_to(message, "Він тебе дуже хоче😈😏😍")
+def smekuni(message): bot.reply_to(message, "🐂Смик бик — Бик Смик!🐂\n" * 3)
 
 
 # ---------------------------
-# АВТОМАТИЧНА РОЗСИЛКА
+# Авто-розсилка
 # ---------------------------
 def send_daily_messages():
     sent_today = None
     while True:
         now = datetime.datetime.now()
+        print(f"[{now}] Worker alive")  # heartbeat
+
         today = now.date()
 
         if sent_today != today:
-            users = load_users()
+            users = get_users()
 
-            for uid, name in users.items():
+            for u in users:
+                uid = u["user_id"]
                 hero = get_random_hero_no_repeat(uid)
 
                 try:
                     bot.send_message(uid,
-                        f"пук. Нагадую, що існує прекрасний сайт - https://karaylo.github.io/regeta/\n"
+                        f"пук. Нагадую, що існує чудовий сайт: https://karaylo.github.io/regeta/\n"
                         f"Сьогодні ти: {hero}!"
                     )
                 except Exception as e:
@@ -183,7 +129,7 @@ def send_daily_messages():
 
 
 # ---------------------------
-# ЗАПУСК БОТА
+# ЗАПУСК
 # ---------------------------
 threading.Thread(target=send_daily_messages, daemon=True).start()
-bot.polling()
+bot.polling(none_stop=True)

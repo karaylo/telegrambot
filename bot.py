@@ -14,7 +14,9 @@ from database import (
     save_last_hero
 )
 
-# --- INIT DATABASE ---
+# ---------------------------
+# INIT DATABASE
+# ---------------------------
 init_db()
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -34,11 +36,12 @@ heroes = [
     "Шахрай",
     "Шептун Підступний",
     "Бортківський Барон",
-    "Смик-Андроїд",
+    "Смип-Андроїд",
 ]
 
+
 # ---------------------------
-# /whoami — стабільний герой
+# Стабільний щоденний герой (детермінований)
 # ---------------------------
 def get_today_hero(user_id):
     today = datetime.date.today().isoformat()
@@ -51,7 +54,7 @@ def get_today_hero(user_id):
 
 
 # ---------------------------
-# Для авто-розсилки — без повторів
+# Рандомний герой без повторів (для розсилки)
 # ---------------------------
 def get_random_hero_no_repeat(user_id):
     last = get_last_hero(user_id)
@@ -63,7 +66,7 @@ def get_random_hero_no_repeat(user_id):
 
 
 # ---------------------------
-# Команди
+# Команди бота
 # ---------------------------
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -93,31 +96,35 @@ def whoami(message):
 def stepan(message):
     bot.reply_to(message, "В степана в дупі шнобель\n" * 3)
 
+
 @bot.message_handler(commands=['regeta'])
 def regeta(message):
     bot.reply_to(message, "Регета пердун!\n" * 3)
 
+
 @bot.message_handler(commands=['shnobel'])
 def shnobel(message):
     bot.reply_to(message, "В Регети в дупі шнобель!\n" * 3)
+
 
 @bot.message_handler(commands=['smekuni'])
 def smekuni(message):
     bot.reply_to(message, "🐂Смик бик — Бик Смик!🐂\n" * 3)
 
 
+
 # ---------------------------
-# Тестова команда: запис у базу
+# Тест DB
 # ---------------------------
 @bot.message_handler(commands=['test_db'])
 def test_db(message):
     user_id = message.from_user.id
     hero = get_random_hero_no_repeat(user_id)
-    bot.reply_to(message, f"Тест успішний!\nТвій герой: {hero}\nЗапис додано в базу.")
+    bot.reply_to(message, f"Тест успішний! Твій герой: {hero}\nЗаписано в базу.")
 
 
 # ---------------------------
-# Авто-розсилка (тільки приватним юзерам)
+# Автоматична щоденна розсилка
 # ---------------------------
 def send_daily_messages():
     sent_today = None
@@ -133,14 +140,15 @@ def send_daily_messages():
             for u in users:
                 uid = u["user_id"]
 
-                # НЕ надсилаємо групам
+                # не розсилаємо групам
                 if uid < 0:
                     continue
 
                 hero = get_random_hero_no_repeat(uid)
 
                 try:
-                    bot.send_message(uid,
+                    bot.send_message(
+                        uid,
                         f"пук. Нагадую, що існує чудовий сайт: https://karaylo.github.io/regeta/\n"
                         f"Сьогодні ти: {hero}!"
                     )
@@ -153,7 +161,10 @@ def send_daily_messages():
 
 
 # ---------------------------
-# ЗАПУСК
+# ЗАПУСК БОТА (FIX ДЛЯ ПОМИЛКИ 409)
 # ---------------------------
-threading.Thread(target=send_daily_messages, daemon=True).start()
-bot.polling(none_stop=True)
+if __name__ == "__main__":
+    threading.Thread(target=send_daily_messages, daemon=True).start()
+
+    # ВАЖЛИВО: infinity_polling запобігає дублюванню потоків → виправляє 409 Conflict
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)

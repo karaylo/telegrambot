@@ -1,13 +1,25 @@
 import os
 import psycopg2
 import psycopg2.extras
+from psycopg2.pool import SimpleConnectionPool
 
 DB_URL = os.getenv("DATABASE_URL")
 
+# Глобальний пул підключень (створюється один раз)
+pool = SimpleConnectionPool(
+    minconn=1,
+    maxconn=5,
+    dsn=DB_URL,
+    sslmode="require"
+)
 
 def get_conn():
-    return psycopg2.connect(DB_URL, sslmode="require")
+    """Взяти існуюче з'єднання з пулу (миттєво)"""
+    return pool.getconn()
 
+def put_conn(conn):
+    """Повернути з'єднання назад у пул"""
+    pool.putconn(conn)
 
 # ---------------------------------------------------------
 #  INIT ALL TABLES HERE
@@ -16,7 +28,6 @@ def init_db():
     conn = get_conn()
     cur = conn.cursor()
 
-    # Таблиця історії героїв
     cur.execute("""
         CREATE TABLE IF NOT EXISTS last_heroes (
             user_id BIGINT PRIMARY KEY,
@@ -25,7 +36,6 @@ def init_db():
         );
     """)
 
-    # Таблиця користувачів для розсилки
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id BIGINT PRIMARY KEY,
@@ -34,8 +44,7 @@ def init_db():
     """)
 
     conn.commit()
-    conn.close()
-
+    put_conn(conn)
 
 # ---------------------------------------------------------
 #  LAST HERO (історія генерацій)
@@ -47,7 +56,7 @@ def get_last_hero(user_id):
     cur.execute("SELECT hero, date FROM last_heroes WHERE user_id = %s;", (user_id,))
     row = cur.fetchone()
 
-    conn.close()
+    put_conn(conn)
     return row
 
 
@@ -63,8 +72,7 @@ def save_last_hero(user_id, hero, date):
     """, (user_id, hero, date))
 
     conn.commit()
-    conn.close()
-
+    put_conn(conn)
 
 # ---------------------------------------------------------
 #  USERS (для розсилки)
@@ -77,10 +85,10 @@ def add_user(user_id, name):
         INSERT INTO users (user_id, name)
         VALUES (%s, %s)
         ON CONFLICT DO NOTHING;
-    """, (user_id, name))
+    """ ,(user_id, name))
 
     conn.commit()
-    conn.close()
+    put_conn(conn)
 
 
 def get_users():
@@ -90,5 +98,5 @@ def get_users():
     cur.execute("SELECT user_id FROM users;")
     rows = cur.fetchall()
 
-    conn.close()
+    put_conn(conn)
     return rows

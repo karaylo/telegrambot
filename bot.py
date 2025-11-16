@@ -67,8 +67,10 @@ def get_random_hero_no_repeat(user_id):
 # ---------------------------
 @bot.message_handler(commands=['start'])
 def start(message):
+    user_id = message.from_user.id
     name = message.from_user.first_name or "Герой"
-    add_user(message.chat.id, name)
+
+    add_user(user_id, name)
 
     bot.send_message(message.chat.id,
         f"Привіт, {name}! Напиши /whoami щоб дізнатися хто ти сьогодні."
@@ -77,28 +79,45 @@ def start(message):
 
 @bot.message_handler(commands=['whoami'])
 def whoami(message):
-    add_user(message.chat.id, message.from_user.first_name)
-    hero = get_today_hero(message.from_user.id)
+    user_id = message.from_user.id
+    name = message.from_user.first_name or "Герой"
 
-    bot.reply_to(message, f"{message.from_user.first_name}, сьогодні ти — {hero}!")
+    add_user(user_id, name)
+    hero = get_today_hero(user_id)
+
+    bot.reply_to(message, f"{name}, сьогодні ти — {hero}!")
 
 
-# Мемні команди (залишаю)
+# Мемні команди
 @bot.message_handler(commands=['stepan'])
-def stepan(message): bot.reply_to(message, "В степана в дупі шнобель\n" * 3)
+def stepan(message):
+    bot.reply_to(message, "В степана в дупі шнобель\n" * 3)
 
 @bot.message_handler(commands=['regeta'])
-def regeta(message): bot.reply_to(message, "Регета пердун!\n" * 3)
+def regeta(message):
+    bot.reply_to(message, "Регета пердун!\n" * 3)
 
 @bot.message_handler(commands=['shnobel'])
-def shnobel(message): bot.reply_to(message, "В Регети в дупі шнобель!\n" * 3)
+def shnobel(message):
+    bot.reply_to(message, "В Регети в дупі шнобель!\n" * 3)
 
 @bot.message_handler(commands=['smekuni'])
-def smekuni(message): bot.reply_to(message, "🐂Смик бик — Бик Смик!🐂\n" * 3)
+def smekuni(message):
+    bot.reply_to(message, "🐂Смик бик — Бик Смик!🐂\n" * 3)
 
 
 # ---------------------------
-# Авто-розсилка
+# Тестова команда: запис у базу
+# ---------------------------
+@bot.message_handler(commands=['test_db'])
+def test_db(message):
+    user_id = message.from_user.id
+    hero = get_random_hero_no_repeat(user_id)
+    bot.reply_to(message, f"Тест успішний!\nТвій герой: {hero}\nЗапис додано в базу.")
+
+
+# ---------------------------
+# Авто-розсилка (тільки приватним юзерам)
 # ---------------------------
 def send_daily_messages():
     sent_today = None
@@ -113,6 +132,11 @@ def send_daily_messages():
 
             for u in users:
                 uid = u["user_id"]
+
+                # НЕ надсилаємо групам
+                if uid < 0:
+                    continue
+
                 hero = get_random_hero_no_repeat(uid)
 
                 try:
